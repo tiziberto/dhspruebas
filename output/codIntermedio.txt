@@ -1,0 +1,15 @@
+label inicio
+t0 = 10
+a = t0
+t1 = 20
+b = t1
+t2 = 5 + 5
+c = t2
+t3 = a + b
+d = t3
+t4 = d + 100
+e = t4
+t5 = 50 + 50
+f = t5
+push f
+endmain

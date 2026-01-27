@@ -1,0 +1,34 @@
+cuando uso i++ tengo dos instrucciones de micro
+cuando uso ++i tenog una sola instruccion de micro, es una instruccion ATOMICA
+
+21/10
+
+Analisis semantico
+
+progrmar no todas las reglas gramaticales, solo las necesarias.
+
+implementar la interaccion con la tabla de simbolos 
+
+trabajar en el generador codigo intermedio:
+    - a partir del arblo sintactico
+    - el codigo intermedio es adimencional (te permite no estar atado a ningun lenguaje ni arquitectura)
+
+
+En App.py
+    -fileStream lee la entrada, interactuamos entres el lexer y el file stream generando tokens a guardando en el tokenStream, todo lo hace el parcer
+    -el parcer dirige, pide tokens mediante el tokenstream, diec cuanto avanzamos
+    - todo lo hecho es guiado por el parcerw
+
+Visitor 
+
+    extiende a parcerTreeVisitor (buscar en el anltr.org para saber que hace) -> hay que parametrizarlo
+    posee varios metodos 
+    visitor avanza como avanza el parcer, siempre buscando en profundidad yendo y viniendo buscando mas caminos
+    ctx-> rule context(el que me da a los hijos,padres, etc)
+    el visitor debe ir directamente al nodo necesario, darle mas control 
+    
+
+
+
+
+    

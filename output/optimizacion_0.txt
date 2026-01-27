@@ -1,0 +1,11 @@
+
+label inicio
+a = 10
+b = 20
+t2 = 10
+c = t2
+d = a+b
+e = d+100
+t5 = 100
+f = t5
+push f

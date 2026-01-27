@@ -1,0 +1,39 @@
+@startuml TablaSimbolos
+
+skinparam ClassAttributeIconSize 0
+hide circle
+
+class TablaSimbolos{
+    -List<Contexto> contextos
+    +addContexto()
+    +delContexto()
+    +addIdentificador(ID)
+    +buscarLocal() : ID
+    +buscarGlobal() : ID
+}
+
+class Contexto{
+    - Dict<String, ID> tabla
+}
+
+abstract class ID<<abstract>>{
+    -String nombre
+    -Enum tipo
+    -Boolean inicializado
+    -Boolean usado
+}
+
+class Variable{
+
+}
+
+class Funcion{
+    -List<ID> args
+}
+
+TablaSimbolos --> Contexto
+Contexto-->ID
+ID <|-- Variable
+ID <|-- Funcion
+
+@enduml
