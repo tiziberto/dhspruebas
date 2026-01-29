@@ -1,5 +1,6 @@
 from compiladoresVisitor import compiladoresVisitor
 from compiladoresParser import compiladoresParser
+from Id import TipoDato
 
 #Esto recorre nodo por nodo basicamente
 class Walker (compiladoresVisitor) :
@@ -107,3 +108,32 @@ class Walker (compiladoresVisitor) :
     def obtenerValor(self, ctx):
         """Extrae el texto/valor de una operación o expresión"""
         return ctx.getText()
+    
+    def visitOpal(self, ctx: compiladoresParser.OpalContext):
+        # Si es una expresión aritmética
+        if ctx.exp():
+            return self.visit(ctx.exp())
+        return TipoDato.VOID
+
+    def visitExp(self, ctx: compiladoresParser.ExpContext):
+        tipo_term = self.visit(ctx.term())
+        # Si hay una parte derecha (e)
+        if ctx.e().getChildCount() > 0:
+            tipo_e = self.visit(ctx.e())
+            # VALIDACIÓN: No permitir sumar INT con CHAR
+            if TipoDato.esNumerico(tipo_term) and tipo_e == TipoDato.CHAR:
+                print("ERROR SEMANTICO: Operación inválida entre NUMÉRICO y CHAR")
+                return TipoDato.ERROR
+            return tipo_term
+        return tipo_term
+
+    def visitFactor(self, ctx: compiladoresParser.FactorContext):
+        if ctx.NUMERO():
+            return TipoDato.INT
+        if ctx.ID():
+            nombre = ctx.ID().getText()
+            # Buscar en la tabla de símbolos y retornar su tipo real
+            # variable = ts.buscar(nombre)
+            # return variable.tipoDato
+            return TipoDato.INT # Ejemplo simplificado
+        return TipoDato.VOID

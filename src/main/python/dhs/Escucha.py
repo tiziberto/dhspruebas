@@ -3,17 +3,17 @@ from compiladoresListener import compiladoresListener
 from compiladoresParser import compiladoresParser
 from TablaSimbolos import TablaSimbolos
 from Contexto import Contexto
-from Id import ID
+from Id import ID, TipoDato
 
 
 class Escucha(compiladoresListener) :
 
 
-    TablaSimbolos = TablaSimbolos()    
-
-    
-    numTokens = 0
-    numNode = 0
+    def __init__(self):
+        # Creamos la instancia de la Tabla de Simbolos
+        self.TablaSimbolos = TablaSimbolos()
+        self.numTokens = 0
+        self.numNode = 0   
 
     # Vemos el comienzo del programa
     # -----------------------------------------------------------
@@ -217,24 +217,40 @@ class Escucha(compiladoresListener) :
         return super().enterAsignacion(ctx)
     
     def exitAsignacion(self, ctx: compiladoresParser.AsignacionContext):
-
         nombre = ctx.getChild(0).getText()
-        valor = ctx.getChild(2). getText()
-        
-        buscarLocal = TablaSimbolos.buscarLocal(TablaSimbolos, nombre)
+        # Buscamos el ID de la variable destino
+        identificador = self.TablaSimbolos.buscarLocal(nombre)
+        if identificador == 1:
+            identificador = self.TablaSimbolos.buscarGlobal(nombre)
 
-        if buscarLocal != 1 : 
-
+        if identificador != 1:
+            valor_ctx = ctx.getChild(2)
+            valor_texto = valor_ctx.getText()
             
-            print("La variable ' " + nombre + " ' se le asigno el valor ' " + valor + " ' ")
-            buscarLocal.inicializado = 1
-            
+            # --- VALIDACIÓN DE TIPOS ---
+            # 1. Evitar asignar un literal char (con '') a un int
+            if identificador.tipoDato == TipoDato.INT and "'" in valor_texto:
+                print(f"ERROR SEMANTICO: No se puede asignar CHAR a variable INT '{nombre}'")
+                return
 
+            # 2. Evitar sumar variables de tipo char en una expresion int
+            # Recorremos los hijos de la expresion buscando IDs
+            for i in range(valor_ctx.getChildCount()):
+                token = valor_ctx.getChild(i)
+                # Si el hijo es un ID (variable) en la suma/operacion
+                if hasattr(token, 'ID') and token.ID():
+                    var_expr = self.TablaSimbolos.buscarLocal(token.getText())
+                    if var_expr == 1: var_expr = self.TablaSimbolos.buscarGlobal(token.getText())
+                    
+                    if var_expr != 1:
+                        if identificador.tipoDato == TipoDato.INT and var_expr.tipoDato == TipoDato.CHAR:
+                            print(f"ERROR SEMANTICO: No se puede sumar '{var_expr.nombre}' (char) en la variable '{nombre}' (int)")
+                            return
+
+            identificador.inicializado = 1
+            print(f"Asignación válida: {nombre} = {valor_texto}")
         else:
-            print("ERROR, la variable no a sido inicializada...")
-            return None
-        return super().exitAsignacion(ctx)
-        
+            print(f"ERROR: Variable '{nombre}' no declarada.")
 
     # -----------------------------------------------------------
     # Exit a parse tree produced by compiladoresParser#programa.
@@ -545,3 +561,55 @@ class Escucha(compiladoresListener) :
      
         return super().exitPuntoYComa(ctx)
     #------------------------------------------------------------------
+    
+    def exitInit(self, ctx: compiladoresParser.InitContext):
+        tipoDatoStr = ctx.getChild(0).getText()
+        i = 1
+        while i < ctx.getChildCount():
+            nombre = ctx.getChild(i).getText()
+            if nombre == ';': break
+            
+            # USAR self.TablaSimbolos (la instancia)
+            if self.TablaSimbolos.buscarLocal(nombre) == 1:
+                self.TablaSimbolos.addIdentificador(nombre, tipoDatoStr)
+                print(f"---> Variable declarada: {tipoDatoStr} {nombre}")
+            else:
+                print(f"ERROR: El identificador '{nombre}' ya existe.")
+            i += 2
+
+    def exitAsignacion(self, ctx: compiladoresParser.AsignacionContext):
+        nombre = ctx.getChild(0).getText()
+        # Buscamos la variable en la Tabla de Símbolos
+        identificador = self.TablaSimbolos.buscarLocal(nombre)
+        if identificador == 1:
+            identificador = self.TablaSimbolos.buscarGlobal(nombre)
+
+        if identificador != 1:
+            # Obtenemos el texto de lo que está a la derecha del '='
+            valor_ctx = ctx.getChild(2)
+            valor_texto = valor_ctx.getText()
+            
+            # Validación de tipos: evitar asignar char a int
+            if identificador.tipoDato == TipoDato.INT:
+                # Si el valor contiene una comilla simple, es un CHAR en tu gramática
+                if "'" in valor_texto:
+                    print(f"ERROR SEMANTICO: No se puede asignar el CHAR {valor_texto} a la variable INT '{nombre}'")
+                    return
+            
+            identificador.inicializado = 1
+            print(f"Asignación válida: {nombre} = {valor_texto}")
+        else:
+            print(f"ERROR: La variable '{nombre}' no ha sido declarada.")
+
+    def exitFactor(self, ctx: compiladoresParser.FactorContext):
+        if ctx.ID():
+            nombre = ctx.ID().getText()
+            busqueda = self.TablaSimbolos.buscarLocal(nombre)
+            if busqueda == 1: busqueda = self.TablaSimbolos.buscarGlobal(nombre)
+            
+            if busqueda == 1:
+                print(f"ERROR: Variable '{nombre}' no declarada.")
+            elif busqueda.inicializado == 0:
+                print(f"ERROR: Variable '{nombre}' no inicializada.")
+            else:
+                busqueda.usado = 1

@@ -1,6 +1,6 @@
-int a , b, c;
-a = 1+1;
+int a;
+int b;
+char c;
 
-while( a <= 2){
-    a = 2;
-}
+a = 5;
+b = a + c;

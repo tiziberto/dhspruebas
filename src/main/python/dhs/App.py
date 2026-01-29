@@ -8,7 +8,7 @@ from Optimizador import Optimizador
 
 
 def main(argv):
-    archivo = "DHS/input/opal.txt"
+    archivo = "../../../../input/opal.txt"
     if len(argv) > 1 :
         archivo = argv[1]
     input = FileStream(archivo)
