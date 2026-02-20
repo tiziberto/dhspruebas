@@ -3,17 +3,16 @@ from compiladoresListener import compiladoresListener
 from compiladoresParser import compiladoresParser
 from TablaSimbolos import TablaSimbolos
 from Contexto import Contexto
-from Id import ID, TipoDato
+from Id import ID,TipoDato
 
 
 class Escucha(compiladoresListener) :
 
-
     def __init__(self):
-        # Creamos la instancia de la Tabla de Simbolos
-        self.TablaSimbolos = TablaSimbolos()
-        self.numTokens = 0
-        self.numNode = 0   
+        self.hubo_error = False
+        self.TablaSimbolos = TablaSimbolos()    
+    numTokens = 0
+    numNode = 0
 
     # Vemos el comienzo del programa
     # -----------------------------------------------------------
@@ -67,14 +66,17 @@ class Escucha(compiladoresListener) :
 
         if pa == None :
             print( "ERROR, se espera un '(' " )
+            self.hubo_error = True
             return None
 
         if pc == None :
             print ( "ERROR, se espera un ')'" )
+            self.hubo_error = True
             return None
         
         if opal == None : 
             print ( "ERROR, se espera una operacion aritmetica o logica")
+            self.hubo_error = True
             return None
         #En el caso de tenerlos tenemos que comprobar si tenemos el opal.
 
@@ -97,14 +99,17 @@ class Escucha(compiladoresListener) :
         print ("Entra")
         if pa == None :
             print( "ERROR, se espera un '(' " )
+            self.hubo_error = True
             return None
 
         if pc == None :
             print ( "ERROR, se espera un ')'" )
+            self.hubo_error = True
             return None
         
         if opal == None : 
             print ( "ERROR, se espera una operacion aritmetica o logica")
+            self.hubo_error = True
         return super().exitIf(ctx)
     # -----------------------------------------------------------
     
@@ -124,18 +129,22 @@ class Escucha(compiladoresListener) :
         
         if pa == None :
             print( "ERROR, se espera un '(' " )
+            self.hubo_error = True
             return None
 
         if pc == None :
             print ( "ERROR, se espera un ')'" )
+            self.hubo_error = True
             return None
         
         if opal == None : 
             print ( "ERROR, se espera una operacion aritmetica o logica")
+            self.hubo_error = True
             return None
         
         if asig == None :
             print( "ERROR, se espera una asignacion " )
+            self.hubo_error = True
             return None
         
         return super().exitIf(ctx)
@@ -179,9 +188,11 @@ class Escucha(compiladoresListener) :
         
                     TablaSimbolos.addIdentificador(TablaSimbolos, nombre, tipoDato)
                 else: 
-                    print ("---> El id ya esta en uso...")
+                    print(f"ERROR SEMÁNTICO: El identificador '{nombre}' ya está en uso.")
+                    self.hubo_error = True
             else :
-               print ("---> El id ya esta en uso...")
+                print(f"ERROR SEMÁNTICO: El identificador '{nombre}' ya está en uso.")
+                self.hubo_error = True
 
             i = i + 2
 
@@ -217,40 +228,71 @@ class Escucha(compiladoresListener) :
         return super().enterAsignacion(ctx)
     
     def exitAsignacion(self, ctx: compiladoresParser.AsignacionContext):
-        nombre = ctx.getChild(0).getText()
-        # Buscamos el ID de la variable destino
-        identificador = self.TablaSimbolos.buscarLocal(nombre)
-        if identificador == 1:
-            identificador = self.TablaSimbolos.buscarGlobal(nombre)
 
-        if identificador != 1:
-            valor_ctx = ctx.getChild(2)
-            valor_texto = valor_ctx.getText()
-            
-            # --- VALIDACIÓN DE TIPOS ---
-            # 1. Evitar asignar un literal char (con '') a un int
-            if identificador.tipoDato == TipoDato.INT and "'" in valor_texto:
-                print(f"ERROR SEMANTICO: No se puede asignar CHAR a variable INT '{nombre}'")
+        print("---> Se encontro una asignacion...")
+
+        # =========================
+        # LADO IZQUIERDO
+        # =========================
+        nombre = ctx.ID().getText()
+
+        simbolo = TablaSimbolos.buscarLocal(TablaSimbolos, nombre)
+        if simbolo == 1:
+            simbolo = TablaSimbolos.buscarGlobal(TablaSimbolos, nombre)
+            if simbolo == 1:
+                print(f"ERROR, variable no declarada: {nombre}")
+                ctx.tipoDato = TipoDato.ERROR
+                self.hubo_error = True
                 return
 
-            # 2. Evitar sumar variables de tipo char en una expresion int
-            # Recorremos los hijos de la expresion buscando IDs
-            for i in range(valor_ctx.getChildCount()):
-                token = valor_ctx.getChild(i)
-                # Si el hijo es un ID (variable) en la suma/operacion
-                if hasattr(token, 'ID') and token.ID():
-                    var_expr = self.TablaSimbolos.buscarLocal(token.getText())
-                    if var_expr == 1: var_expr = self.TablaSimbolos.buscarGlobal(token.getText())
-                    
-                    if var_expr != 1:
-                        if identificador.tipoDato == TipoDato.INT and var_expr.tipoDato == TipoDato.CHAR:
-                            print(f"ERROR SEMANTICO: No se puede sumar '{var_expr.nombre}' (char) en la variable '{nombre}' (int)")
-                            return
+        tipo_lhs = simbolo.tipoDato
 
-            identificador.inicializado = 1
-            print(f"Asignación válida: {nombre} = {valor_texto}")
+        # =========================
+        # LADO DERECHO
+        # =========================
+        tipo_rhs = None
+
+        # CASO 1: opal
+        if ctx.opal() is not None:
+            if not hasattr(ctx.opal(), "tipoDato"):
+                print(f"ERROR, no se pudo determinar el tipo de la expresión asignada a {nombre}")
+                ctx.tipoDato = TipoDato.ERROR
+                return
+
+            tipo_rhs = ctx.opal().tipoDato
+
+        # CASO 2: char
+        elif ctx.char() is not None:
+            tipo_rhs = TipoDato.CHAR
+
         else:
-            print(f"ERROR: Variable '{nombre}' no declarada.")
+            print(f"ERROR, asignación inválida a {nombre}")
+            ctx.tipoDato = TipoDato.ERROR
+            return
+
+        # =========================
+        # CHEQUEO DE TIPOS
+        # =========================
+        if tipo_rhs == TipoDato.ERROR:
+            ctx.tipoDato = TipoDato.ERROR
+            return
+
+        if tipo_lhs != tipo_rhs:
+            print(f"ERROR de tipos: no se puede asignar {tipo_rhs} a {tipo_lhs}")
+            ctx.tipoDato = TipoDato.ERROR
+            self.hubo_error = True
+            return
+
+        # =========================
+        # ASIGNACIÓN OK
+        # =========================
+        simbolo.inicializado = 1
+        simbolo.usado = 1
+
+        print(f"La variable '{nombre}' se inicializó correctamente")
+
+        ctx.tipoDato = tipo_lhs
+        
 
     # -----------------------------------------------------------
     # Exit a parse tree produced by compiladoresParser#programa.
@@ -274,64 +316,60 @@ class Escucha(compiladoresListener) :
    
     def enterFunc(self, ctx: compiladoresParser.FuncContext):
         print("---> Se ingreso una funcion... ")
+        # 1. Creamos el objeto Contexto y lo agregamos
+        nuevo_contexto_local = Contexto()
+        # IMPORTANTE: Usar la variable de instancia self.TablaSimbolos
+        self.TablaSimbolos.addContexto(nuevo_contexto_local)
         
-        return super().enterFunc(ctx)
-    
+        # 2. Extraemos el nombre y tipo para el reporte (con validación de seguridad)
+        if ctx.getChildCount() >= 2:
+            retorno = ctx.getChild(0).getText()
+            nombrefuncion = ctx.getChild(1).getText()
+        
+            # 3. Procesamos los parámetros para que existan dentro de la función
+            parametros = ctx.var_func()
+            if parametros:
+                i = 0
+                while i < parametros.getChildCount():
+                    # Obtenemos los nodos
+                    nodo_tipo = parametros.getChild(i)
+                    nodo_nombre = parametros.getChild(i+1)
+                    
+                    if nodo_tipo and nodo_nombre:
+                        tipo_str = nodo_tipo.getText()
+                        nombre = nodo_nombre.getText()
+                        
+                        # Mapeamos al tipo de dato
+                        tipo_dato = self.mapear_tipo(tipo_str)
+                        
+                        # 4. DECLARACIÓN FORMAL:
+                        # Tu método addIdentificador(nombre, tipoDato) crea el ID internamente
+                        self.TablaSimbolos.addIdentificador(nombre, tipo_dato)
+                        print(f"      > Parámetro declarado: {tipo_str} {nombre}")
+                    
+                    # Avanzamos 3: TIPO (0), ID (1), COMA (2) -> El siguiente TIPO es el (3)
+                    i += 3
+
+            print(f"---> La funcion '{nombrefuncion}' ({retorno}) tiene contexto local activo.")
+
     def exitFunc(self, ctx: compiladoresParser.FuncContext):
+        # Al salir, verificamos que haya contextos y cerramos
+        if len(self.TablaSimbolos.contextos) > 0:
+            self.TablaSimbolos.delContexto()
         
+        if ctx.getChildCount() >= 2:
+            nombrefuncion = ctx.getChild(1).getText()
+            print(f"---> Finalizó el análisis de la función '{nombrefuncion}'. Contexto liberado.")
 
-        #Primero compruebo que este bien escrita
-
-        pa = ctx.PA()
-        pc = ctx.PC()
-        #Lo que tenemos que hacer aca es comprobar si tenemos ambos parentesis en el while 
-        
-        if pa == None :
-            print( "ERROR, se espera un '(' " )
-            return None
-
-        if pc == None :
-            print ( "ERROR, se espera un ')'" )
-            return None
-        
-        retorno = ctx.getChild(0).getText()
-        nombrefuncion = ctx.getChild(1).getText()
-
-        buscarGlobal = TablaSimbolos.buscarGlobal(TablaSimbolos, nombrefuncion)
-
-        comprobar = False
-        listaParametros = []
-
-        if buscarGlobal == 1:
-            print ( "ERROR, la funcion no tiene declarado un prototipo" )
-            return None;
-        parametros = ctx.var_func()
-
-        if parametros and parametros.getChildCount() > 0:
-                
-            comprobar = True
-
-            i = 0
-            while i < parametros.getChildCount() :
-            
-                tipo = parametros.getChild(i).getText()
-                nombre = parametros. getChild(i+1).getText()
-                listaParametros.append(f"{tipo} {nombre}")
-                i+=3
-
-            print ("---> La funcion ' " + nombrefuncion + " ' fue ingresada correctamente")
-            print ("--------------------------------------")
-            print ("Nombre: " + nombrefuncion)
-            print ("Tipo de Retorno: " + retorno)
-            
-        if comprobar :
-            print("Parametros: ")
-            print(listaParametros)
-        else :
-            print("La funcion no necesita parametros")    
-        print ("--------------------------------------")       
-
-        
+    def mapear_tipo(self, t):
+        t = t.lower()
+        # Asegúrate de que TipoDato.INT etc. coincidan con tu archivo Id.py
+        if t == 'int': return TipoDato.INT
+        if t == 'double': return TipoDato.DOUBLE
+        if t == 'float': return TipoDato.FLOAT
+        if t == 'char': return TipoDato.CHAR
+        if t == 'bool': return TipoDato.BOOLEAN
+        return TipoDato.VOID
         
 
     #Aca declaramos el prototipo 
@@ -356,6 +394,7 @@ class Escucha(compiladoresListener) :
         if buscarGlobal == 1 :
 
             parametros = ctx.var_func()
+            self.hubo_error = True
 
             if parametros and parametros.getChildCount() > 0:
                 
@@ -397,40 +436,61 @@ class Escucha(compiladoresListener) :
         return super().enterFactor(ctx)
 
     def exitFactor(self, ctx: compiladoresParser.FactorContext):
-        
-        nombreVariable = ctx.ID() #Aca lo que puede pasar es que no tengamos un id como factor, entonces devuelve none en ese caso
 
-        if nombreVariable != None : 
-            busqueda = TablaSimbolos.buscarLocal(TablaSimbolos, nombreVariable.getText()) #Aca lo que vamos a hacer es buscarlo dentro de la tabla de simbolos...
-            #comprobamos is esta inicializada la variable
+        # =========================
+        # CASO: IDENTIFICADOR
+        # =========================
+        if ctx.ID() is not None:
+            nombre = ctx.ID().getText()
+
+            busqueda = TablaSimbolos.buscarLocal(TablaSimbolos, nombre)
             if busqueda == 1:
-                print( "ERROR, variable no existente" )
-                return None
-                
-            if busqueda.inicializado == 1: 
-                    #Vamos a definir la variable como usada
-
-                    busqueda.usado = 1
-            else :
-                print("ERROR, la variable no a sido inicializada")
-                return None
- 
-            if busqueda == 1:
-                busqueda = TablaSimbolos.buscarGlobal(TablaSimbolos ,nombreVariable)
-
+                busqueda = TablaSimbolos.buscarGlobal(TablaSimbolos, nombre)
                 if busqueda == 1:
-                    print( "ERROR, variable no existente" )
-                    return None
-                
-                #comprobamos si fue inicializada, si no fue asi no se conoce el valor, por lo que no podemos hacer nada con ella
-                if busqueda.inicializado == 1: 
-                    #Vamos a definir la variable como usada
-                    busqueda.usado = 1 
-                else :
-                    print("ERROR, la variable no a sido inicializada")
-                    
+                    print("ERROR, variable no existente:", nombre)
+                    ctx.tipoDato = TipoDato.ERROR
+                    self.hubo_error = True
+                    return
 
-        return super().exitFactor(ctx)
+            if busqueda.inicializado != 1:
+                print("ERROR, la variable no ha sido inicializada:", nombre)
+                ctx.tipoDato = TipoDato.ERROR
+                self.hubo_error = True
+                return
+
+            busqueda.usado = 1
+            ctx.tipoDato = busqueda.tipoDato
+            return
+
+        # =========================
+        # CASO: LITERAL
+        # =========================
+        texto = ctx.getChild(0).getText()
+
+        # int
+        if texto.isdigit():
+            ctx.tipoDato = TipoDato.INT
+            return
+
+        # float
+        if texto.replace('.', '', 1).isdigit():
+            ctx.tipoDato = TipoDato.FLOAT
+            return
+
+        # char
+        if len(texto) == 3 and texto.startswith("'") and texto.endswith("'"):
+            ctx.tipoDato = TipoDato.CHAR
+            return
+
+        # =========================
+        # SI NO ENTRA EN NADA
+        # =========================
+        print("ERROR, factor no reconocido:", texto)
+        ctx.tipoDato = TipoDato.ERROR
+
+
+
+
     #Aca vamos a definir la llamadas a funciones...
     #------------------------------------------------------------------
     def enterCallFunc(self, ctx: compiladoresParser.CallFuncContext):
@@ -446,6 +506,7 @@ class Escucha(compiladoresListener) :
         if comprobarGlobal == 1 :
 
             print("ERROR, la funcion no esta definida")
+            self.hubo_error = True
             return None
         
         
@@ -562,54 +623,92 @@ class Escucha(compiladoresListener) :
         return super().exitPuntoYComa(ctx)
     #------------------------------------------------------------------
     
-    def exitInit(self, ctx: compiladoresParser.InitContext):
-        tipoDatoStr = ctx.getChild(0).getText()
-        i = 1
-        while i < ctx.getChildCount():
-            nombre = ctx.getChild(i).getText()
-            if nombre == ';': break
-            
-            # USAR self.TablaSimbolos (la instancia)
-            if self.TablaSimbolos.buscarLocal(nombre) == 1:
-                self.TablaSimbolos.addIdentificador(nombre, tipoDatoStr)
-                print(f"---> Variable declarada: {tipoDatoStr} {nombre}")
-            else:
-                print(f"ERROR: El identificador '{nombre}' ya existe.")
-            i += 2
-
-    def exitAsignacion(self, ctx: compiladoresParser.AsignacionContext):
-        nombre = ctx.getChild(0).getText()
-        # Buscamos la variable en la Tabla de Símbolos
-        identificador = self.TablaSimbolos.buscarLocal(nombre)
-        if identificador == 1:
-            identificador = self.TablaSimbolos.buscarGlobal(nombre)
-
-        if identificador != 1:
-            # Obtenemos el texto de lo que está a la derecha del '='
-            valor_ctx = ctx.getChild(2)
-            valor_texto = valor_ctx.getText()
-            
-            # Validación de tipos: evitar asignar char a int
-            if identificador.tipoDato == TipoDato.INT:
-                # Si el valor contiene una comilla simple, es un CHAR en tu gramática
-                if "'" in valor_texto:
-                    print(f"ERROR SEMANTICO: No se puede asignar el CHAR {valor_texto} a la variable INT '{nombre}'")
-                    return
-            
-            identificador.inicializado = 1
-            print(f"Asignación válida: {nombre} = {valor_texto}")
+    
+    def exitTerm(self, ctx: compiladoresParser.TermContext):
+        if hasattr(ctx.factor(), "tipoDato"):
+            ctx.tipoDato = ctx.factor().tipoDato
         else:
-            print(f"ERROR: La variable '{nombre}' no ha sido declarada.")
+            print("ERROR, no se pudo determinar el tipo en term")
+            ctx.tipoDato = TipoDato.ERROR
 
-    def exitFactor(self, ctx: compiladoresParser.FactorContext):
-        if ctx.ID():
-            nombre = ctx.ID().getText()
-            busqueda = self.TablaSimbolos.buscarLocal(nombre)
-            if busqueda == 1: busqueda = self.TablaSimbolos.buscarGlobal(nombre)
-            
-            if busqueda == 1:
-                print(f"ERROR: Variable '{nombre}' no declarada.")
-            elif busqueda.inicializado == 0:
-                print(f"ERROR: Variable '{nombre}' no inicializada.")
+        
+    def exitT(self, ctx: compiladoresParser.TContext):
+
+        # t : (* factor t) | ε
+        if ctx.factor() is None:
+            ctx.tipoDato = None
+            return
+
+        tipo_izq = ctx.factor().tipoDato
+
+        if ctx.t() is None or ctx.t().tipoDato is None:
+            ctx.tipoDato = tipo_izq
+            return
+
+        tipo_der = ctx.t().tipoDato
+
+        if tipo_izq != tipo_der:
+            print("ERROR de tipos en multiplicacion:", tipo_izq, "y", tipo_der)
+            ctx.tipoDato = tipo_izq
+            self.hubo_error = True
+            return
+
+        ctx.tipoDato = tipo_izq
+
+
+
+    def exitExp(self, ctx: compiladoresParser.ExpContext):
+        if hasattr(ctx.term(), "tipoDato"):
+            ctx.tipoDato = ctx.term().tipoDato
+        else:
+            print("ERROR, no se pudo determinar el tipo en exp")
+            ctx.tipoDato = TipoDato.ERROR
+
+
+    def exitE(self, ctx: compiladoresParser.EContext):
+
+        # e : (+ term e) | ε
+        if ctx.term() is None:
+            ctx.tipoDato = None
+            return
+
+        tipo_izq = ctx.term().tipoDato
+
+        if ctx.e() is None or ctx.e().tipoDato is None:
+            ctx.tipoDato = tipo_izq
+            return
+
+        tipo_der = ctx.e().tipoDato
+
+        if tipo_izq != tipo_der:
+            print("ERROR de tipos en suma/resta:", tipo_izq, "y", tipo_der)
+            ctx.tipoDato = tipo_izq
+            return
+
+        ctx.tipoDato = tipo_izq
+
+    def exitOpal(self, ctx: compiladoresParser.OpalContext):
+        """
+        opal : exp | oplo | callFunc ;
+        """
+
+        if ctx.exp() is not None:
+            if hasattr(ctx.exp(), "tipoDato"):
+                ctx.tipoDato = ctx.exp().tipoDato
             else:
-                busqueda.usado = 1
+                print("ERROR, no se pudo determinar el tipo en opal (exp)")
+                ctx.tipoDato = TipoDato.ERROR
+            return
+
+        if ctx.oplo() is not None:
+            # expresiones lógicas → boolean
+            ctx.tipoDato = TipoDato.BOOLEAN
+            return
+
+        if ctx.callFunc() is not None:
+            if hasattr(ctx.callFunc(), "tipoDato"):
+                ctx.tipoDato = ctx.callFunc().tipoDato
+            else:
+                print("ERROR, no se pudo determinar el tipo en opal (callFunc)")
+                ctx.tipoDato = TipoDato.ERROR
+            return
