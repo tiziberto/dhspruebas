@@ -236,14 +236,12 @@ class Escucha(compiladoresListener) :
         # =========================
         nombre = ctx.ID().getText()
 
-        simbolo = TablaSimbolos.buscarLocal(TablaSimbolos, nombre)
-        if simbolo == 1:
-            simbolo = TablaSimbolos.buscarGlobal(TablaSimbolos, nombre)
-            if simbolo == 1:
-                print(f"ERROR, variable no declarada: {nombre}")
-                ctx.tipoDato = TipoDato.ERROR
-                self.hubo_error = True
-                return
+        simbolo = self.TablaSimbolos.buscarIdentificador(nombre)
+    
+        if simbolo is None or simbolo == 1: # Ajusta según lo que devuelva tu método
+            print(f"ERROR SEMÁNTICO: Variable '{nombre}' no declarada.")
+            self.hubo_error = True
+            return
 
         tipo_lhs = simbolo.tipoDato
 
@@ -443,14 +441,12 @@ class Escucha(compiladoresListener) :
         if ctx.ID() is not None:
             nombre = ctx.ID().getText()
 
-            busqueda = TablaSimbolos.buscarLocal(TablaSimbolos, nombre)
-            if busqueda == 1:
-                busqueda = TablaSimbolos.buscarGlobal(TablaSimbolos, nombre)
-                if busqueda == 1:
-                    print("ERROR, variable no existente:", nombre)
-                    ctx.tipoDato = TipoDato.ERROR
-                    self.hubo_error = True
-                    return
+            busqueda = self.TablaSimbolos.buscarIdentificador(nombre)
+        
+            if busqueda is None or busqueda == 1:
+                print(f"ERROR SEMÁNTICO: Variable '{nombre}' no declarada en este alcance.")
+                self.hubo_error = True
+                return
 
             if busqueda.inicializado != 1:
                 print("ERROR, la variable no ha sido inicializada:", nombre)
@@ -528,37 +524,18 @@ class Escucha(compiladoresListener) :
 
         variable = ctx.getChild(0).getText()
 
-        local = TablaSimbolos.buscarLocal(TablaSimbolos, variable)
-        #Aca vamos a buscar si se encuentra declarada de manera local
-        if local != 1:
-            # si si
+        simbolo = self.TablaSimbolos.buscarIdentificador(variable)
 
-            #Comprobamos si la variable esta inicializada
-
-            if local.inicializado != 1 : 
-                print ( "ERROR, la variable no esta declarada" )
-                return None
-            
-            # En el caso de si estar inicializada lo que vamos a hacer es ponerla como usada.
-
-            local.usado = 1
-        else :
-            
-            #Ahora la vamos a buscar pero globalmente
-            glob = TablaSimbolos.buscarGlobal(TablaSimbolos, variable)
-
-            if glob == 1:
-                print ( "ERROR, la variable no esta declarada" )
-                return None
-            
-            if glob.inicializado != 1 : 
-                print ( "ERROR, la variable no esta inicializado" )
-                return None
-            
-
-            #Si esta la encontramos 
-            glob.usado = 1
-
+        if simbolo is None or simbolo == 1:
+            print(f"ERROR: No se puede incrementar '{variable}', no existe.")
+            self.hubo_error = True
+            return
+        
+        if simbolo.inicializado != 1:
+            print(f"ERROR: Variable '{variable}' no inicializada.")
+            return
+        
+        simbolo.usado = 1
 
 
         return super().exitIncremento(ctx)
@@ -570,36 +547,18 @@ class Escucha(compiladoresListener) :
 
         variable = ctx.getChild(0).getText()
 
-        local = TablaSimbolos.buscarLocal(TablaSimbolos, variable)
-        #Aca vamos a buscar si se encuentra declarada de manera local
-        if local != 1:
-            # si si
+        simbolo = self.TablaSimbolos.buscarIdentificador(variable)
 
-            #Comprobamos si la variable esta inicializada
-
-            if local.inicializado != 1 : 
-                print ( "ERROR, la variable no esta declarada" )
-                return None
-            
-            # En el caso de si estar inicializada lo que vamos a hacer es ponerla como usada.
-
-            local.usado = 1
-        else :
-            
-            #Ahora la vamos a buscar pero globalmente
-            glob = TablaSimbolos.buscarGlobal(TablaSimbolos, variable)
-
-            if glob == 1:
-                print ( "ERROR, la variable no esta declarada" )
-                return None
-            
-            if glob.inicializado != 1 : 
-                print ( "ERROR, la variable no esta inicializado" )
-                return None
-            
-
-            #Si esta la encontramos 
-            glob.usado = 1
+        if simbolo is None or simbolo == 1:
+            print(f"ERROR: No se puede incrementar '{variable}', no existe.")
+            self.hubo_error = True
+            return
+        
+        if simbolo.inicializado != 1:
+            print(f"ERROR: Variable '{variable}' no inicializada.")
+            return
+        
+        simbolo.usado = 1
 
 
 
