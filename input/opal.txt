@@ -1,6 +1,18 @@
-int a;
-int b;
-char c;
+int resta (int a, int b){
+    int resultado;
+    resultado = a-b;
+    return resultado;
+}
 
-a = 5;
-b = a + c;
+int main() {
+    int a;
+    a=60;
+    
+    if (a > 50) {
+        a = 1;
+    } else {
+       a=0;
+    }
+
+    return 0;
+}

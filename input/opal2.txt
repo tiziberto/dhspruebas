@@ -1,0 +1,14 @@
+int calculo() {
+    int a = 10;
+    int b = 20;
+    int c = 5;
+    int resultado;
+    resultado = a + b * c;
+    return resultado;
+}
+
+int main() {
+    int resultado;
+    resultado = calculo();
+    return resultado;
+}

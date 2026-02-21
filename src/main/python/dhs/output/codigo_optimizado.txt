@@ -1,0 +1,12 @@
+  1. function resta():
+  2. pop b
+  3. pop a
+  4. t1 = a - b
+  5. resultado = t1
+  6. return resultado
+  7. function main():
+  8. t2 = 60 > 50
+  9. if NOT (t2) goto L2
+ 10. goto L2
+ 11. L2:
+ 12. return 0

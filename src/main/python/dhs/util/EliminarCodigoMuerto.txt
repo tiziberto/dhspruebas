@@ -1,0 +1,113 @@
+ #--- FASE 2: Eliminación de Código Muerto ---
+    # Borra instrucciones que calculan valores que NUNCA se utilizan después.
+    @staticmethod
+    def eliminar_codigo_muerto(codigo):
+        print("\n--- Eliminando código muerto ---\n")
+        lineas_limpias = [re.sub(r'^\s*\d+\.\s*', '', l).strip() for l in codigo]
+        
+        vivas = set() 
+        resultado_indices = []
+        
+        # Análisis de atrás hacia adelante (Backward Analysis)
+        for i in range(len(lineas_limpias) - 1, -1, -1):
+            instr = lineas_limpias[i]
+
+            if instr.startswith("function"):
+                vivas.clear() # Al inicio de la función nada está vivo aún
+                resultado_indices.append(i)
+                continue
+            
+            if Constante.etiqueta.match(instr):
+                resultado_indices.append(i)
+                continue
+
+            m = Constante.asignacion.match(instr)
+            if m:
+                var_destino = m.group(1).strip()
+                exp_origen = m.group(2).strip()
+                
+                # Una asignación es útil SOLO si su resultado se usará después
+                # O si es una llamada a función (porque tiene efectos secundarios)
+                es_llamada = "(" in exp_origen and ")" in exp_origen
+                
+                if var_destino in vivas or es_llamada:
+                    resultado_indices.append(i)
+                    if var_destino in vivas:
+                        vivas.remove(var_destino)
+                    
+                    # Las variables que alimentan este cálculo ahora están vivas
+                    vivas.update(Constante.usoVariable.findall(exp_origen))
+                    print(f"Manteniendo asignación útil: {instr}")
+                else:
+                    print(f"Eliminando código muerto (variable no leída): {instr}")
+                    continue
+            else:
+                # Los IF, GOTO y RETURN siempre se mantienen y "dan vida" a sus variables
+                vivas.update(Constante.usoVariable.findall(instr))
+                resultado_indices.append(i)
+
+        resultado_indices.reverse()
+        return [codigo[i] for i in resultado_indices]
+   
+    @staticmethod
+    # --- FASE 3: Optimización de Saltos (Control Flow) ---
+    def optimizar_saltos(codigo):
+        print("\n--- Optimizando saltos ---")
+        # Limpiar números de línea
+        lineas = [re.sub(r'^\s*\d+\.\s*', '', l).strip() for l in codigo]
+        
+        # JUMP THREADING: Mapear saltos que van a etiquetas que solo contienen otro salto
+        redireccion = {}
+        for i in range(len(lineas) - 1):
+            m_etiq = re.match(r'^(\w+):$', lineas[i])
+            if m_etiq:
+                etiq_actual = m_etiq.group(1)
+                # Salto a etiqueta vacía que precede a otra etiqueta (L1: L2: ...)
+                m_next_etiq = re.match(r'^(\w+):$', lineas[i+1])
+                if m_next_etiq:
+                    redireccion[etiq_actual] = m_next_etiq.group(1)
+                # Salto a una etiqueta que inmediatamente tiene un GOTO (L1: goto L2)
+                m_next_goto = re.match(r'^goto\s+(\w+)$', lineas[i+1])
+                if m_next_goto:
+                    redireccion[etiq_actual] = m_next_goto.group(1)
+        
+        print(f"Redirecciones encontradas: {redireccion}")
+        
+        temp_resultado = []
+        for i, instr in enumerate(lineas):
+             # Aplicar las redirecciones a todos los 'goto'
+            m_any_goto = re.search(r'goto\s+(\w+)', instr)
+            if m_any_goto:
+                dest = m_any_goto.group(1)
+                while dest in redireccion:
+                    dest = redireccion[dest]
+                    print(f"Redirigiendo salto a {dest}")
+                instr = re.sub(r'goto\s+\w+', f'goto {dest}', instr)
+
+            # PEEPHOLE: Si un GOTO salta a la línea inmediatamente siguiente, es basura.          
+            m_goto_simple = re.match(r'^goto\s+(\w+)$', instr)
+            if m_goto_simple and i + 1 < len(lineas):
+                if f"{m_goto_simple.group(1)}:" == lineas[i+1]:
+                    print(f"Eliminando salto innecesario en línea {i+1}: {instr}")
+                    continue
+            
+            # Lo mismo para bloques IF que saltan a la siguiente línea
+            m_if_simple = re.match(r'^if NOT\s*\(.*\)\s*goto\s+(\w+)$', instr)
+            if m_if_simple and i + 1 < len(lineas):
+                if f"{m_if_simple.group(1)}:" == lineas[i+1]:
+                    print(f"Eliminando IF innecesario en línea {i+1}: {instr}")
+                    continue
+
+            temp_resultado.append(instr)
+
+        # Limpieza de etiquetas innecesarias
+        usadas = set(re.findall(r'goto\s+(\w+)', "\n".join(temp_resultado)))
+        final = []
+        for l in temp_resultado:
+            m_etiq = re.match(r'^(\w+):$', l)
+            if m_etiq and m_etiq.group(1) not in usadas:
+                print(f"Eliminando etiqueta innecesaria: {l}")
+                continue
+            final.append(l)
+        print("\n--- Optimización de saltos completada ---\n")
+        return final
